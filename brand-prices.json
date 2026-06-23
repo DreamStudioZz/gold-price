@@ -1,0 +1,22 @@
+{
+  "date": "2026-06-23",
+  "source": "金价查询网(huangjinjiage.cn)",
+  "unit": "元/克",
+  "brands": [
+    {"name": "周大福", "price": 1277},
+    {"name": "金至尊", "price": 1277},
+    {"name": "谢瑞麟", "price": 1277},
+    {"name": "六福珠宝", "price": 1275},
+    {"name": "老庙黄金", "price": 1272},
+    {"name": "周生生", "price": 1270},
+    {"name": "老凤祥", "price": 1268},
+    {"name": "菜百首饰", "price": 1260},
+    {"name": "中国黄金", "price": 1260}
+  ],
+  "recovery": {
+    "gold": 893,
+    "platinum": 322,
+    "k18": 647,
+    "palladium": 205
+  }
+}
