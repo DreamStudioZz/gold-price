@@ -1,0 +1,6 @@
+services:
+  gold-price:
+    build: .
+    ports:
+      - "8088:8088"
+    restart: unless-stopped

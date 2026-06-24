@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实时金价监控</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d28; --border: #2a2d3a;
+    --text: #e0e0e0; --sub: #8890a0; --gold: #f0b90b;
+    --up: #0ecb81; --down: #f6465d; --blue: #3b82f6;
+  }
+  * { margin:0;padding:0;box-sizing:border-box; }
+  body {
+    background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+    min-height:100vh; display:flex; justify-content:center; padding:20px;
+  }
+  .container { width:100%;max-width:720px; }
+  .header { text-align:center;margin-bottom:32px; }
+  .header h1 { font-size:28px;font-weight:700;letter-spacing:1px; }
+  .header .gold-dot { color:var(--gold); }
+  .status-bar {
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:24px;font-size:13px;color:var(--sub);
+  }
+  .status-dot {
+    display:inline-block;width:8px;height:8px;border-radius:50%;
+    margin-right:6px; background:var(--up); animation:pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .main-card {
+    background:var(--card);border:1px solid var(--border);
+    border-radius:16px;padding:32px;margin-bottom:16px;
+  }
+  .price-section { text-align:center; }
+  .label { font-size:14px;color:var(--sub);margin-bottom:8px;letter-spacing:2px;text-transform:uppercase; }
+  .main-price { font-size:56px;font-weight:700;color:var(--gold);line-height:1.1;font-variant-numeric:tabular-nums; }
+  .main-price .unit { font-size:20px;color:var(--sub);margin-left:4px; }
+  .change-row { display:flex;justify-content:center;gap:16px;margin-top:12px;font-size:16px;font-weight:600; }
+  .up { color:var(--up); } .down { color:var(--down); }
+  .convert-row {
+    margin-top:20px;padding-top:20px;border-top:1px solid var(--border);
+    display:grid;grid-template-columns:repeat(2,1fr);gap:16px;
+  }
+  .convert-item { text-align:center; }
+  .convert-item .val { font-size:24px;font-weight:700;color:#fff; }
+  .convert-item .lbl { font-size:12px;color:var(--sub);margin-top:4px; }
+  .section-title { font-size:14px;color:var(--sub);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;padding-left:4px; }
+  .brands-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px; }
+  .brand-card { background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center; }
+  .brand-card .bname { font-size:13px;color:var(--text); }
+  .brand-card .bprice { font-size:14px;font-weight:700;color:var(--gold); }
+  .recovery-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px; }
+  .recovery-card { background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center; }
+  .recovery-card .rname { font-size:11px;color:var(--sub);margin-bottom:2px; }
+  .recovery-card .rprice { font-size:15px;font-weight:700;color:#fff; }
+  .metals-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:12px; }
+  .metal-card { background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center; }
+  .metal-card .name { font-size:12px;color:var(--sub);margin-bottom:6px; }
+  .metal-card .price { font-size:16px;font-weight:700;color:#fff; }
+  .metal-card .change { font-size:12px;margin-top:4px; }
+  .error-msg { text-align:center;padding:40px;color:var(--sub); }
+  .error-msg button { margin-top:16px;padding:10px 24px;background:var(--blue);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px; }
+  @media (max-width:600px) {
+    .main-price { font-size:40px; }
+    .metals-grid { grid-template-columns:repeat(2,1fr); }
+    .convert-row { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header"><h1><span class="gold-dot">●</span> 实时金价监控</h1></div>
+  <div class="status-bar">
+    <span><span class="status-dot" id="statusDot"></span><span id="updateTime">加载中...</span></span>
+    <span id="countdown">下次刷新: 30s</span>
+  </div>
+
+  <div id="loading" style="text-align:center;padding:40px;color:var(--sub);">正在获取数据...</div>
+  <div id="error" class="error-msg" style="display:none;">
+    <p>无法获取金价数据</p>
+    <p style="font-size:12px;margin-top:8px;" id="errDetail"></p>
+    <button onclick="fetchAll()">重试</button>
+  </div>
+
+  <div id="content" style="display:none;">
+    <div class="main-card">
+      <div class="price-section">
+        <div class="label">国际现货黄金 / XAUUSD</div>
+        <div class="main-price" id="goldPrice">--</div>
+        <div class="change-row">
+          <span id="goldChange"></span>
+          <span id="goldChangePct"></span>
+        </div>
+      </div>
+      <div class="convert-row">
+        <div class="convert-item">
+          <div class="val" id="cnyPrice">--</div>
+          <div class="lbl">人民币估算（元/克）· 汇率 <span id="fxRate">--</span></div>
+        </div>
+        <div class="convert-item">
+          <div class="val" id="cnyPerOunce">--</div>
+          <div class="lbl">人民币/盎司</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">品牌金店足金饰品价格 <span style="font-weight:400;font-size:11px;" id="brandDate"></span></div>
+    <div class="brands-grid" id="brandsGrid"></div>
+
+    <div class="section-title">回收参考价</div>
+    <div class="recovery-grid" id="recoveryGrid"></div>
+
+    <div class="section-title">其他贵金属</div>
+    <div class="metals-grid">
+      <div class="metal-card"><div class="name">白银 XAG</div><div class="price" id="silverPrice">--</div><div class="change" id="silverChange"></div></div>
+      <div class="metal-card"><div class="name">铂金 XPT</div><div class="price" id="platinumPrice">--</div><div class="change" id="platinumChange"></div></div>
+      <div class="metal-card"><div class="name">钯金 XPD</div><div class="price" id="palladiumPrice">--</div><div class="change" id="palladiumChange"></div></div>
+      <div class="metal-card"><div class="name">铑</div><div class="price" id="rhodiumPrice">--</div><div class="change" style="color:var(--sub);">参考价</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const REFRESH = 30;
+let countdown = REFRESH;
+
+function $id(id) { return document.getElementById(id); }
+
+function fmtUSD(n) {
+  if (n == null || isNaN(n)) return '--';
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtCNY(n) {
+  if (n == null || isNaN(n)) return '--';
+  return '¥' + n.toLocaleString('zh-CN', { maximumFractionDigits: 0 });
+}
+
+function renderMetal(id, data) {
+  if (!data) return;
+  $id(id + 'Price').textContent = fmtUSD(data.price);
+  if (data.change_pct != null) {
+    const p = data.change_pct;
+    $id(id + 'Change').textContent = (p > 0 ? '+' : '') + p.toFixed(2) + '%';
+    $id(id + 'Change').className = p >= 0 ? 'up' : 'down';
+  }
+}
+
+function renderBrands(data) {
+  if (!data) return;
+  $id('brandDate').textContent = '（' + data.date + '）';
+  $id('brandsGrid').innerHTML = data.brands.map(b =>
+    `<div class="brand-card"><span class="bname">${b.name}</span><span><span class="bprice">${b.price}</span> 元/克</span></div>`
+  ).join('');
+  if (data.recovery) {
+    const r = data.recovery;
+    $id('recoveryGrid').innerHTML = [
+      { n: '黄金回收', p: r.gold },
+      { n: '铂金回收', p: r.platinum },
+      { n: '18K金回收', p: r.k18 },
+      { n: '钯金回收', p: r.palladium },
+    ].map(x => `<div class="recovery-card"><div class="rname">${x.n}</div><div class="rprice">${x.p} 元/克</div></div>`).join('');
+  }
+}
+
+async function fetchJSON(url) {
+  const r = await fetch(url, { cache: 'no-store' });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+async function fetchAll() {
+  const isFirst = $id('content').style.display === 'none';
+  if (isFirst) { $id('loading').style.display = 'block'; $id('error').style.display = 'none'; }
+
+  try {
+    const [live, brands] = await Promise.all([
+      fetchJSON('/api/live'),
+      fetchJSON('/api/brands').catch(() => null),
+    ]);
+
+    const g = live.gold;
+    if (!g || !g.price) throw new Error('金价数据缺失');
+
+    $id('goldPrice').innerHTML = g.price.toLocaleString('en-US', { minimumFractionDigits: 2 }) + '<span class="unit">USD/oz</span>';
+    $id('goldChange').textContent = (g.change > 0 ? '+' : '') + g.change.toFixed(2) + ' USD';
+    $id('goldChange').className = g.change >= 0 ? 'up' : 'down';
+    $id('goldChangePct').textContent = (g.change_pct > 0 ? '+' : '') + g.change_pct.toFixed(2) + '%';
+    $id('goldChangePct').className = g.change_pct >= 0 ? 'up' : 'down';
+
+    $id('cnyPrice').textContent = fmtCNY(g.cny_per_gram) + '/克';
+    $id('cnyPerOunce').textContent = fmtCNY(g.cny_per_ounce);
+    $id('fxRate').textContent = live.rate;
+
+    renderMetal('silver', live.silver);
+    renderMetal('platinum', live.platinum);
+    renderMetal('palladium', live.palladium);
+    if (live.rhodium) $id('rhodiumPrice').textContent = fmtUSD(live.rhodium.price);
+
+    $id('updateTime').textContent = '更新于 ' + live.time;
+    $id('statusDot').style.background = '#4ade80';
+
+    if (brands) renderBrands(brands);
+
+    if (isFirst) { $id('loading').style.display = 'none'; $id('content').style.display = 'block'; }
+    countdown = REFRESH;
+    updateCountdown();
+  } catch (e) {
+    if (isFirst) {
+      $id('loading').style.display = 'none';
+      $id('error').style.display = 'block';
+      $id('errDetail').textContent = e.message;
+    }
+  }
+}
+
+function updateCountdown() {
+  $id('countdown').textContent = `下次刷新: ${countdown}s`;
+  if (countdown <= 0) { fetchAll(); countdown = REFRESH; }
+  countdown--;
+}
+
+fetchAll();
+setInterval(updateCountdown, 1000);
+</script>
+</body>
+</html>
