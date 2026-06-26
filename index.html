@@ -147,20 +147,22 @@ function renderMetal(id, data) {
   }
 }
 
-function renderBrands(data) {
+function renderBrands(data, live) {
   if (!data) return;
   $id('brandDate').textContent = '（' + data.date + '）';
   $id('brandsGrid').innerHTML = data.brands.map(b =>
     `<div class="brand-card"><span class="bname">${b.name}</span><span><span class="bprice">${b.price}</span> 元/克</span></div>`
   ).join('');
-  if (data.recovery) {
-    const r = data.recovery;
-    $id('recoveryGrid').innerHTML = [
-      { n: '黄金回收', p: r.gold },
-      { n: '铂金回收', p: r.platinum },
-      { n: '18K金回收', p: r.k18 },
-      { n: '钯金回收', p: r.palladium },
-    ].map(x => `<div class="recovery-card"><div class="rname">${x.n}</div><div class="rprice">${x.p} 元/克</div></div>`).join('');
+  if (live && live.recovery) {
+    const r = live.recovery;
+    const items = [];
+    if (r.gold != null) items.push({ n: '黄金回收', p: r.gold });
+    if (r.platinum != null) items.push({ n: '铂金回收', p: r.platinum });
+    if (r.k18 != null) items.push({ n: '18K金回收', p: r.k18 });
+    if (r.palladium != null) items.push({ n: '钯金回收', p: r.palladium });
+    $id('recoveryGrid').innerHTML = items
+      .map(x => `<div class="recovery-card"><div class="rname">${x.n}</div><div class="rprice">${x.p} 元/克</div></div>`)
+      .join('');
   }
 }
 
@@ -201,7 +203,7 @@ async function fetchAll() {
     $id('updateTime').textContent = '更新于 ' + live.time;
     $id('statusDot').style.background = '#4ade80';
 
-    if (brands) renderBrands(brands);
+    if (brands) renderBrands(brands, live);
 
     if (isFirst) { $id('loading').style.display = 'none'; $id('content').style.display = 'block'; }
     countdown = REFRESH;

@@ -103,6 +103,17 @@ def update_prices():
             except Exception:
                 pass
 
+            # recovery prices: gold = live - 10, others from live spot
+            recovery = {}
+            if gold:
+                gr = gold["cny_per_gram"]
+                recovery["gold"] = round(gr - 10, 1)
+                recovery["k18"] = round((gr - 10) * 0.75, 1)
+            if platinum:
+                recovery["platinum"] = round(platinum["cny_per_gram"], 1)
+            if palladium:
+                recovery["palladium"] = round(palladium["cny_per_gram"], 1)
+
             cache = {
                 "time": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "rate": round(rate, 4),
@@ -111,6 +122,7 @@ def update_prices():
                 "platinum": platinum,
                 "palladium": palladium,
                 "rhodium": rhodium,
+                "recovery": recovery,
             }
             print(f"[{cache['time']}] XAU={gold['price'] if gold else 'N/A'} | "
                   f"CNY={gold['cny_per_gram'] if gold else 'N/A'}元/克 | rate={rate:.4f}")

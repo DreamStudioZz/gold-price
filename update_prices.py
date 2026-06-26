@@ -1,69 +1,89 @@
 """
 品牌金价数据更新脚本
-从金价查询网抓取最新品牌金店价格，更新 brand-prices.json
+从 pinpaijinjia.html（品牌金价汇总页）抓取最新价格，更新 brand-prices.json
 用法: python update_prices.py
 """
 import json
 import re
 import urllib.request
 from datetime import date
+import os
 
-BASE = "http://www.huangjinjiage.cn"
+URL = "http://www.huangjinjiage.cn/pinpaijinjia.html"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
 
 def fetch(url):
     req = urllib.request.Request(url, headers=HEADERS)
     with urllib.request.urlopen(req, timeout=15) as r:
-        return r.read().decode("utf-8", errors="ignore")
+        return r.read().decode("gbk", errors="ignore")
 
-def find_latest_url(html):
-    m = re.search(r'href="(/jinjia/\d+/\d+\.html)"', html)
-    return BASE + m.group(1) if m else None
 
-def parse_detail(html):
+def parse(html):
     brands = []
-    recovery = {}
-    for m in re.finditer(r'<td>([\u4e00-\u9fa5·]{2,8}(?:珠宝|黄金|首饰|金店)?)</td>\s*<td>足金[^<]*</td>\s*<td>(\d+)</td>', html):
+    seen = set()
+
+    # 品牌金价：品牌名 | 黄金价格/足金xxx | 价格元/克（排除回收价行）
+    for m in re.finditer(
+        r'<td>([^<]+)</td>\s*'
+        r'<td>(?!.*回收)(?:黄金价格|足金[^<]*)</td>\s*'
+        r'<td>(\d+)元/克</td>',
+        html,
+    ):
         name = m.group(1).strip()
-        if name not in [b['name'] for b in brands]:
-            brands.append({"name": name, "price": int(m.group(2))})
-    for pat, key in [
-        (r'黄金回收价格[^\d]*(\d+)', 'gold'),
-        (r'铂金回收价格[^\d]*(\d+)', 'platinum'),
-        (r'18K金回收价格[^\d]*(\d+)', 'k18'),
-        (r'钯金回收价格[^\d]*(\d+)', 'palladium'),
-    ]:
-        m = re.search(pat, html)
-        if m: recovery[key] = int(m.group(1))
+        price = int(m.group(2))
+        if name != "水贝黄金" and name not in seen:
+            seen.add(name)
+            brands.append({"name": name, "price": price})
+
+    # 投资金条
+    inv = re.search(r'金条价格</td>\s*<td>(\d+)元/克</td>', html)
+    if inv:
+        brands.append({"name": "投资金条", "price": int(inv.group(1))})
+
+    # 回收价
+    recovery = {}
+    name_map = {"黄金": "gold", "铂金": "platinum", "18K金": "k18", "钯金": "palladium"}
+    for m in re.finditer(
+        r'<td>([^<]*)回收价格</td>\s*<td>(\d+)元/克</td>',
+        html,
+    ):
+        key = re.sub(r"<[^>]+>", "", m.group(1)).strip()
+        if key in name_map:
+            recovery[name_map[key]] = int(m.group(2))
+
     return brands, recovery
 
-html = fetch(BASE)
-url = find_latest_url(html)
-if not url:
-    print("未找到今日详情页链接")
-    exit(1)
 
-print(f"抓取: {url}")
-detail = fetch(url)
-brands, recovery = parse_detail(detail)
+def main():
+    html = fetch(URL)
+    date_match = re.search(r"(\d{4})年(\d{2})月(\d{2})日", html)
+    page_date = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}" if date_match else "未知"
 
-if not brands:
-    print("未解析到品牌数据")
-    exit(1)
+    brands, recovery = parse(html)
 
-data = {
-    "date": date.today().isoformat(),
-    "source": "金价查询网(huangjinjiage.cn)",
-    "unit": "元/克",
-    "brands": brands,
-    "recovery": recovery
-}
+    if not brands:
+        print(f"未解析到品牌数据 (页面日期: {page_date})")
+        return
 
-import os
-out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brand-prices.json")
-with open(out, "w", encoding="utf-8") as f:
-    json.dump(data, f, ensure_ascii=False, indent=2)
+    data = {
+        "date": date.today().isoformat(),
+        "source": "金价查询网(huangjinjiage.cn)",
+        "unit": "元/克",
+        "brands": brands,
+        "recovery": recovery,
+    }
 
-print(f"已更新 {len(brands)} 个品牌 ({data['date']})")
-for b in brands:
-    print(f"  {b['name']}: {b['price']} 元/克")
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brand-prices.json")
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print(f"已更新 {len(brands)} 个品牌, {len(recovery)} 种回收价 ({data['date']})")
+    for b in brands:
+        print(f"  {b['name']}: {b['price']} 元/克")
+    for k, v in recovery.items():
+        print(f"  回收 {k}: {v} 元/克")
+
+
+if __name__ == "__main__":
+    main()
